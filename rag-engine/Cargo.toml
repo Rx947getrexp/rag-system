@@ -112,7 +112,7 @@ flate2 = "1.0"
 zstd = "0.13"
 
 # WASM 插件支持
-wasmtime = { version = "15.0", optional = true }
+wasmtime = { version = "24.0", optional = true }
 wasmtime-wasi = { version = "15.0", optional = true }
 
 # 文件处理

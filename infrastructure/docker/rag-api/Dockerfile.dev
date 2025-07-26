@@ -1,0 +1,98 @@
+FROM golang:1.21-bullseye as base
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装开发工具
+RUN go install github.com/cosmtrek/air@latest && \
+    go install github.com/swaggo/swag/cmd/swag@latest && \
+    go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制 go.mod 和 go.sum
+COPY go.mod go.sum ./
+
+# 下载依赖
+RUN go mod download
+
+# 复制源代码
+COPY . .
+
+# 生成 Swagger 文档
+RUN swag init -g cmd/server/main.go
+
+# 暴露端口
+EXPOSE 8000 8002
+
+# 创建 air 配置文件
+RUN echo '[build]\n\
+  cmd = "go build -o ./tmp/main cmd/server/main.go"\n\
+  bin = "tmp/main"\n\
+  full_bin = "APP_ENV=dev ./tmp/main"\n\
+  include_ext = ["go", "tpl", "tmpl", "html"]\n\
+  exclude_dir = ["assets", "tmp", "vendor", "frontend"]\n\
+  include_dir = []\n\
+  exclude_file = []\n\
+  log = "build-errors.log"\n\
+  delay = 1000\n\
+  stop_on_error = true\n\
+  send_interrupt = false\n\
+  kill_delay = 500\n\
+[color]\n\
+  main = "magenta"\n\
+  watcher = "cyan"\n\
+  build = "yellow"\n\
+  runner = "green"\n\
+[log]\n\
+  time = false\n\
+[misc]\n\
+  clean_on_exit = true' > .air.toml
+
+# 开发模式启动命令 (使用 air 进行热重载)
+CMD ["air"]
+
+# 生产构建阶段
+FROM base as builder
+
+# 构建应用
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main cmd/server/main.go
+
+# 生产运行阶段
+FROM alpine:3.18 as runtime
+
+# 安装运行时依赖
+RUN apk --no-cache add ca-certificates tzdata
+
+# 创建应用用户
+RUN addgroup -g 1001 -S rag && \
+    adduser -u 1001 -S rag -G rag
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制编译好的二进制文件
+COPY --from=builder /app/main .
+
+# 复制配置文件
+COPY configs/ ./configs/
+
+# 设置权限
+RUN chown -R rag:rag /app
+USER rag
+
+# 暴露端口
+EXPOSE 8000 8002
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8002/health || exit 1
+
+# 启动命令
+CMD ["./main"]

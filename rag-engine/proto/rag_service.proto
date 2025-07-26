@@ -1,0 +1,223 @@
+// rag-engine/proto/rag_service.proto
+syntax = "proto3";
+
+package rag;
+
+option go_package = "rag-api/pkg/pb";
+
+// RAG 服务定义
+service RagService {
+  // 文档管理
+  rpc ProcessDocument(ProcessDocumentRequest) returns (ProcessDocumentResponse);
+  rpc DeleteDocument(DeleteDocumentRequest) returns (DeleteDocumentResponse);
+  rpc GetDocument(GetDocumentRequest) returns (GetDocumentResponse);
+  rpc ListDocuments(ListDocumentsRequest) returns (ListDocumentsResponse);
+
+  // 搜索功能
+  rpc Search(SearchRequest) returns (SearchResponse);
+  rpc FindSimilar(FindSimilarRequest) returns (FindSimilarResponse);
+  rpc SuggestQueries(SuggestQueriesRequest) returns (SuggestQueriesResponse);
+
+  // RAG 问答
+  rpc GenerateAnswer(GenerateAnswerRequest) returns (GenerateAnswerResponse);
+  rpc GenerateAnswerStream(GenerateAnswerRequest) returns (stream StreamChunk);
+
+  // 系统管理
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc GetStats(GetStatsRequest) returns (GetStatsResponse);
+}
+
+// 通用消息类型
+message Empty {}
+
+message Timestamp {
+  int64 seconds = 1;
+  int32 nanos = 2;
+}
+
+// 文档处理相关消息
+message ProcessDocumentRequest {
+  bytes data = 1;
+  string filename = 2;
+  map<string, string> metadata = 3;
+}
+
+message ProcessDocumentResponse {
+  string document_id = 1;
+  bool success = 2;
+  uint32 chunks_processed = 3;
+  uint32 vectors_created = 4;
+  uint64 processing_time_ms = 5;
+  repeated string errors = 6;
+  repeated string warnings = 7;
+  map<string, string> metadata = 8;
+}
+
+message DeleteDocumentRequest {
+  string document_id = 1;
+}
+
+message DeleteDocumentResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetDocumentRequest {
+  string document_id = 1;
+}
+
+message GetDocumentResponse {
+  Document document = 1;
+}
+
+message ListDocumentsRequest {
+  uint32 page = 1;
+  uint32 page_size = 2;
+  string workspace_id = 3;
+}
+
+message ListDocumentsResponse {
+  repeated Document documents = 1;
+  uint64 total = 2;
+  uint32 page = 3;
+  uint32 page_size = 4;
+}
+
+message Document {
+  string id = 1;
+  string filename = 2;
+  string format = 3;
+  uint64 file_size = 4;
+  uint32 chunk_count = 5;
+  Timestamp created_at = 6;
+  Timestamp updated_at = 7;
+  map<string, string> metadata = 8;
+}
+
+// 搜索相关消息
+message SearchRequest {
+  string query = 1;
+  SearchOptions options = 2;
+}
+
+message SearchOptions {
+  string strategy = 1;
+  uint32 top_k = 2;
+  optional float similarity_threshold = 3;
+  repeated QueryFilter filters = 4;
+  bool enable_reranking = 5;
+  optional uint32 rerank_top_k = 6;
+  optional string workspace_id = 7;
+}
+
+message QueryFilter {
+  string field = 1;
+  string operator = 2;
+  string value = 3;
+}
+
+message SearchResponse {
+  repeated SearchResultItem results = 1;
+  uint32 total_found = 2;
+  uint64 processing_time_ms = 3;
+  string strategy_used = 4;
+  map<string, string> metadata = 5;
+}
+
+message SearchResultItem {
+  string id = 1;
+  string content = 2;
+  float score = 3;
+  map<string, string> metadata = 4;
+  optional string document_id = 5;
+  optional uint32 chunk_index = 6;
+}
+
+message FindSimilarRequest {
+  string document_id = 1;
+  uint32 top_k = 2;
+}
+
+message FindSimilarResponse {
+  repeated SearchResultItem results = 1;
+}
+
+message SuggestQueriesRequest {
+  string partial_query = 1;
+  uint32 limit = 2;
+}
+
+message SuggestQueriesResponse {
+  repeated string suggestions = 1;
+}
+
+// RAG 问答相关消息
+message GenerateAnswerRequest {
+  string question = 1;
+  repeated ChatMessage conversation_history = 2;
+  optional SearchOptions search_options = 3;
+}
+
+message GenerateAnswerResponse {
+  string answer = 1;
+  repeated SearchResultItem sources = 2;
+  string conversation_id = 3;
+  TokenUsage usage = 4;
+  uint64 processing_time_ms = 5;
+}
+
+message StreamChunk {
+  string content = 1;
+  bool is_final = 2;
+  optional string finish_reason = 3;
+}
+
+message ChatMessage {
+  MessageRole role = 1;
+  string content = 2;
+  map<string, string> metadata = 3;
+}
+
+enum MessageRole {
+  SYSTEM = 0;
+  USER = 1;
+  ASSISTANT = 2;
+  FUNCTION = 3;
+}
+
+message TokenUsage {
+  uint32 prompt_tokens = 1;
+  uint32 completion_tokens = 2;
+  uint32 total_tokens = 3;
+}
+
+// 系统管理相关消息
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string status = 1;
+  map<string, ComponentHealth> components = 2;
+  Timestamp timestamp = 3;
+}
+
+message ComponentHealth {
+  string status = 1;
+  string message = 2;
+  Timestamp last_check = 3;
+}
+
+message GetStatsRequest {}
+
+message GetStatsResponse {
+  PipelineStats stats = 1;
+}
+
+message PipelineStats {
+  uint64 total_documents = 1;
+  uint64 total_chunks = 2;
+  uint64 total_vectors = 3;
+  double avg_processing_time_ms = 4;
+  double success_rate = 5;
+  optional Timestamp last_processed = 6;
+  double throughput_docs_per_hour = 7;
+}

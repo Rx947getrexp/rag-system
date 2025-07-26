@@ -1,0 +1,24 @@
+# 忽略 Rust 构建目录
+/target/
+**/target/
+
+# 忽略 Cargo 依赖构建产物
+**/*.rlib
+**/*.rmeta
+**/*.dSYM
+**/*.d
+
+# 可选：忽略 IDE 生成文件
+# VS Code
+.vscode/
+# JetBrains 系
+.idea/
+
+# 忽略临时文件
+*.log
+*.tmp
+*.swp
+
+# 忽略操作系统文件
+.DS_Store
+Thumbs.db
